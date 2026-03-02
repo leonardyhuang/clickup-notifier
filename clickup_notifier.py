@@ -2,7 +2,7 @@
 """
 ClickUp Desktop Notifier for macOS
 Checks for new task assignments, task comment @mentions, and chat @mentions.
-Runs every 30 minutes. Mentions repeat every run until:
+Runs on a configurable interval (set via launchd StartInterval). Mentions repeat every run until:
   - Task mentions: task is closed, OR user has replied after the mention
   - Chat mentions: user has posted in that channel after the mention
 """
@@ -25,6 +25,10 @@ LOOKBACK_HOURS = 72  # 3 days — covers weekends / leaves
 
 NOTIFY_TASKS = os.environ.get("NOTIFY_TASKS", "true").strip().lower() == "true"
 NOTIFY_CHAT  = os.environ.get("NOTIFY_CHAT",  "true").strip().lower() == "true"
+
+_interval_sec = int(os.environ.get("START_INTERVAL", "1800"))
+_interval_min = _interval_sec // 60
+CHECK_INTERVAL_LABEL = f"{_interval_min} min" if _interval_min < 60 else f"{_interval_min // 60}h"
 
 
 # ─── API Helpers ─────────────────────────────────────────────────────────────
@@ -489,7 +493,7 @@ def main():
 
     state["last_check_ts"] = int(datetime.now().timestamp() * 1000)
     save_state(state)
-    print(f"[DONE] Next check in ~30 min.")
+    print(f"[DONE] Next check in ~{CHECK_INTERVAL_LABEL}.")
 
 
 if __name__ == "__main__":

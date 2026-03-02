@@ -15,6 +15,9 @@
         <string>true</string>
         <key>NOTIFY_CHAT</key>
         <string>true</string>
+        <!-- mirrors StartInterval below, so the script can log it -->
+        <key>START_INTERVAL</key>
+        <string>1800</string>
     </dict>
 
     <key>ProgramArguments</key>

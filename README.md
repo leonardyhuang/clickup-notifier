@@ -1,6 +1,6 @@
 # ClickUp Desktop Notifier
 
-A macOS background service that checks ClickUp every 30 minutes and sends native desktop notifications for:
+A macOS background service that periodically checks ClickUp and sends native desktop notifications for:
 
 - **@mentions** in task comments (repeats until you reply or the task is closed)
 - **@mentions** in space chat channels (repeats until you reply in that channel)

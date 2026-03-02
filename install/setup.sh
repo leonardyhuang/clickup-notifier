@@ -134,6 +134,8 @@ cat > "$PLIST_DEST" << PLIST
         <string>${NOTIFY_TASKS}</string>
         <key>NOTIFY_CHAT</key>
         <string>${NOTIFY_CHAT}</string>
+        <key>START_INTERVAL</key>
+        <string>${START_INTERVAL}</string>
     </dict>
 
     <key>ProgramArguments</key>

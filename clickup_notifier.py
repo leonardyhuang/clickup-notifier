@@ -270,8 +270,17 @@ def find_chat_mentions(team_id, user_id, since_ts, state):
                 continue
 
             mention_date = int(msg.get("date", 0))
+            if mention_date < since_ts:
+                continue  # Older than lookback window (API ignores date_created_gt for chat)
+
             if _user_replied_after(messages, user_id, mention_date):
-                continue  # Already replied — considered cleared
+                continue  # Already replied in channel — considered cleared
+
+            # Check thread replies if the mention has any
+            if msg.get("reply_count", 0) > 0:
+                thread_replies = _fetch_thread_replies(msg["id"])
+                if _user_replied_after(thread_replies, user_id, mention_date):
+                    continue
 
             # Prefer an embedded chat/r/ link from the message itself;
             # fall back to the workspace Chat section.

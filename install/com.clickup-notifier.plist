@@ -26,7 +26,6 @@
         <string>/Users/YOUR_USERNAME/Scripts/clickup_notifier.py</string>
     </array>
 
-    <!-- Run every 1800 seconds (30 minutes) -->
     <key>StartInterval</key>
     <integer>1800</integer>
 

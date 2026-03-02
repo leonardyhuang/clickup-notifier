@@ -1,3 +1,17 @@
+# Logs
 logs/
 *.log
+
+# macOS
 .DS_Store
+
+# Environment / secrets — never commit real credentials
+.env
+.env.*
+*.secret
+
+# State file (lives in ~/, but just in case)
+.clickup_notifier_state.json
+
+# Generated plist with real credentials (lives in ~/Library/LaunchAgents/, not here)
+# The install/ template is tracked intentionally — it uses placeholders only

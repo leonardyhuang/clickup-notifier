@@ -154,6 +154,16 @@ def _user_replied_after(comments, user_id, mention_date):
     )
 
 
+def _user_reacted(comment, user_id):
+    """Return True if the user added any emoji reaction to this comment/message."""
+    for reaction in comment.get("reactions", []):
+        # Reactions can be a flat list {"user": {...}} or a dict keyed by emoji
+        if isinstance(reaction, dict):
+            if str(reaction.get("user", {}).get("id", "")) == str(user_id):
+                return True
+    return False
+
+
 def _fetch_thread_replies(comment_id):
     """Fetch thread replies for a comment (returns [] on unsupported endpoint)."""
     data = api_get(f"/comment/{comment_id}/reply")
@@ -198,6 +208,10 @@ def find_task_mentions(tasks, user_id):
                 thread_replies = _fetch_thread_replies(comment["id"])
                 if _user_replied_after(thread_replies, user_id, mention_date):
                     continue
+
+            # Emoji reaction on the mention = acknowledged
+            if _user_reacted(comment, user_id):
+                continue
 
             mentions.append({
                 "kind": "task",
@@ -281,6 +295,10 @@ def find_chat_mentions(team_id, user_id, since_ts, state):
                 thread_replies = _fetch_thread_replies(msg["id"])
                 if _user_replied_after(thread_replies, user_id, mention_date):
                     continue
+
+            # Emoji reaction on the mention = acknowledged
+            if _user_reacted(msg, user_id):
+                continue
 
             # Prefer an embedded chat/r/ link from the message itself;
             # fall back to the workspace Chat section.

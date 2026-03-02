@@ -134,6 +134,7 @@ def fetch_all_recent_tasks(team_id, since_ts):
             "date_updated_gt": str(since_ts),
             "subtasks": "true",
             "include_closed": "false",
+            "include_markdown_description": "true",
             "page": str(page),
         })
         batch = data.get("tasks", []) if data else []
@@ -246,35 +247,34 @@ def _mention_in_quill_delta(desc, user_id):
 def find_description_mentions(tasks, user_id, username):
     """
     Find @mentions of the user in task descriptions.
-    Handles two formats:
-      1. Plain text — searches for '@username' (covers manual text mentions)
-      2. Quill delta JSON — parses structured mention nodes by user_id
-    Note: ClickUp strips @mention tags from the plain text description field for
-    structured mentions created via the @ menu, so coverage depends on the format
-    the task editor stored.
+    Detection order (most reliable first):
+      1. markdown_description — ClickUp renders @mentions as [@name](#user_mention#ID),
+         detectable by user_id. Requires include_markdown_description=true on the fetch.
+      2. Quill delta JSON in description field — parses {"insert": {"mention": {...}}}.
+      3. Plain text fallback — searches for '@username'.
     Clears naturally when the task is closed (include_closed=false filters them out).
     """
-    if not username and not user_id:
-        return []
+    mention_marker = f"#user_mention#{user_id}"
     pattern = f"@{username}".lower() if username else None
     mentions = []
     for task in tasks:
-        desc = task.get("description") or ""
-        if not desc:
-            continue
+        md_desc = task.get("markdown_description") or ""
+        plain_desc = task.get("description") or ""
         found = (
-            (pattern and pattern in desc.lower())
-            or _mention_in_quill_delta(desc, user_id)
+            (mention_marker in md_desc)
+            or _mention_in_quill_delta(plain_desc, user_id)
+            or (pattern and pattern in plain_desc.lower())
         )
         if not found:
             continue
         task_url = task.get("url") or f"https://app.clickup.com/t/{task['id']}"
         creator = task.get("creator", {}).get("username", "Someone")
+        preview = plain_desc[:80] if plain_desc else md_desc[:80]
         mentions.append({
             "kind": "description",
             "task_name": task.get("name", "Unknown"),
             "commenter": creator,
-            "text_preview": desc[:80],
+            "text_preview": preview,
             "url": task_url,
         })
     return mentions

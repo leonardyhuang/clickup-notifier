@@ -223,6 +223,63 @@ def find_task_mentions(tasks, user_id):
     return mentions
 
 
+def _mention_in_quill_delta(desc, user_id):
+    """
+    Return True if the description is a Quill delta JSON string that contains
+    a structured @mention of user_id ({"insert": {"mention": {"id": ...}}}).
+    """
+    if not desc.startswith('{"ops":'):
+        return False
+    try:
+        delta = json.loads(desc)
+        for op in delta.get("ops", []):
+            insert = op.get("insert", "")
+            if isinstance(insert, dict):
+                mention = insert.get("mention", {})
+                if str(mention.get("id", "")) == str(user_id):
+                    return True
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    return False
+
+
+def find_description_mentions(tasks, user_id, username):
+    """
+    Find @mentions of the user in task descriptions.
+    Handles two formats:
+      1. Plain text — searches for '@username' (covers manual text mentions)
+      2. Quill delta JSON — parses structured mention nodes by user_id
+    Note: ClickUp strips @mention tags from the plain text description field for
+    structured mentions created via the @ menu, so coverage depends on the format
+    the task editor stored.
+    Clears naturally when the task is closed (include_closed=false filters them out).
+    """
+    if not username and not user_id:
+        return []
+    pattern = f"@{username}".lower() if username else None
+    mentions = []
+    for task in tasks:
+        desc = task.get("description") or ""
+        if not desc:
+            continue
+        found = (
+            (pattern and pattern in desc.lower())
+            or _mention_in_quill_delta(desc, user_id)
+        )
+        if not found:
+            continue
+        task_url = task.get("url") or f"https://app.clickup.com/t/{task['id']}"
+        creator = task.get("creator", {}).get("username", "Someone")
+        mentions.append({
+            "kind": "description",
+            "task_name": task.get("name", "Unknown"),
+            "commenter": creator,
+            "text_preview": desc[:80],
+            "url": task_url,
+        })
+    return mentions
+
+
 def get_conv_view_ids(team_id, state):
     """
     Return list of {space_name, view_id, space_id} for all space chat views.
@@ -382,6 +439,21 @@ def main():
                     print(f"                 \"{m['text_preview']}\"")
                 send_notification(
                     f"ClickUp — @{m['commenter']} mentioned you",
+                    m["task_name"],
+                    subtitle=m["text_preview"] or "Click to open",
+                    url=m["url"],
+                )
+                total_task_mentions += 1
+
+            # ── Task description @mentions ────────────────────────────────────
+            desc_mentions = find_description_mentions(recent_tasks, user_id, user.get("username", ""))
+            for m in desc_mentions:
+                print(f"  [MENTION/DESC] @{m['commenter']} in description: {m['task_name']}")
+                print(f"                 {m['url']}")
+                if m["text_preview"]:
+                    print(f"                 \"{m['text_preview']}\"")
+                send_notification(
+                    f"ClickUp — mentioned in task description",
                     m["task_name"],
                     subtitle=m["text_preview"] or "Click to open",
                     url=m["url"],

@@ -178,20 +178,49 @@ def _fetch_thread_replies(comment_id):
     return []
 
 
-def find_task_mentions(tasks, user_id):
+def find_task_mentions(tasks, user_id, username=""):
     """
-    Find @mentions in task comments.
-    Skips a mention if the user has already replied after it (reply = cleared).
-    Checks both top-level comments and thread replies.
+    Find @mentions in task comments AND task descriptions.
+    Shares the comment fetch so description clear-checks add no extra API calls.
+
+    Comment mention clears: user replied/reacted after the mention.
+    Description mention clears: user has posted any comment after task creation,
+      or reacted to any comment on the task.
     """
+    mention_marker = f"#user_mention#{user_id}"
+    desc_pattern = f"@{username}".lower() if username else None
     mentions = []
     for task in tasks:
         data = api_get(f"/task/{task['id']}/comment")
-        if not data or "comments" not in data:
-            continue
-        comments = data["comments"]
+        comments = (data.get("comments") or []) if data else []
         task_url = task.get("url") or f"https://app.clickup.com/t/{task['id']}"
 
+        # ── Description @mention ──────────────────────────────────────────────
+        md_desc = task.get("markdown_description") or ""
+        plain_desc = task.get("description") or ""
+        desc_mentioned = (
+            (mention_marker in md_desc)
+            or _mention_in_quill_delta(plain_desc, user_id)
+            or (desc_pattern and desc_pattern in plain_desc.lower())
+        )
+        if desc_mentioned:
+            task_created = int(task.get("date_created", 0))
+            # Cleared if user replied in comments after task creation
+            desc_cleared = _user_replied_after(comments, user_id, task_created)
+            # Also cleared if user reacted to any comment
+            if not desc_cleared:
+                desc_cleared = any(_user_reacted(c, user_id) for c in comments)
+            if not desc_cleared:
+                creator = task.get("creator", {}).get("username", "Someone")
+                mentions.append({
+                    "kind": "description",
+                    "task_name": task.get("name", "Unknown"),
+                    "commenter": creator,
+                    "text_preview": plain_desc[:80],
+                    "url": task_url,
+                })
+
+        # ── Comment @mentions ─────────────────────────────────────────────────
         for comment in comments:
             mentioned = any(
                 isinstance(part, dict)
@@ -204,17 +233,14 @@ def find_task_mentions(tasks, user_id):
 
             mention_date = int(comment.get("date", 0))
 
-            # Check top-level replies first (fast, no extra API call)
             if _user_replied_after(comments, user_id, mention_date):
                 continue
 
-            # Check thread replies if this comment has any
             if comment.get("reply_count", 0) > 0:
                 thread_replies = _fetch_thread_replies(comment["id"])
                 if _user_replied_after(thread_replies, user_id, mention_date):
                     continue
 
-            # Emoji reaction on the mention = acknowledged
             if _user_reacted(comment, user_id):
                 continue
 
@@ -246,42 +272,6 @@ def _mention_in_quill_delta(desc, user_id):
     except (json.JSONDecodeError, AttributeError):
         pass
     return False
-
-
-def find_description_mentions(tasks, user_id, username):
-    """
-    Find @mentions of the user in task descriptions.
-    Detection order (most reliable first):
-      1. markdown_description — ClickUp renders @mentions as [@name](#user_mention#ID),
-         detectable by user_id. Requires include_markdown_description=true on the fetch.
-      2. Quill delta JSON in description field — parses {"insert": {"mention": {...}}}.
-      3. Plain text fallback — searches for '@username'.
-    Clears naturally when the task is closed (include_closed=false filters them out).
-    """
-    mention_marker = f"#user_mention#{user_id}"
-    pattern = f"@{username}".lower() if username else None
-    mentions = []
-    for task in tasks:
-        md_desc = task.get("markdown_description") or ""
-        plain_desc = task.get("description") or ""
-        found = (
-            (mention_marker in md_desc)
-            or _mention_in_quill_delta(plain_desc, user_id)
-            or (pattern and pattern in plain_desc.lower())
-        )
-        if not found:
-            continue
-        task_url = task.get("url") or f"https://app.clickup.com/t/{task['id']}"
-        creator = task.get("creator", {}).get("username", "Someone")
-        preview = plain_desc[:80] if plain_desc else md_desc[:80]
-        mentions.append({
-            "kind": "description",
-            "task_name": task.get("name", "Unknown"),
-            "commenter": creator,
-            "text_preview": preview,
-            "url": task_url,
-        })
-    return mentions
 
 
 def get_conv_view_ids(team_id, state):
@@ -433,31 +423,24 @@ def main():
                 state["seen_task_ids"].append(task["id"])
                 total_assignments += 1
 
-            # ── Task comment @mentions ────────────────────────────────────────
+            # ── Task comment + description @mentions ──────────────────────────
             recent_tasks = fetch_all_recent_tasks(team_id, since_ts)
-            task_mentions = find_task_mentions(recent_tasks, user_id)
+            task_mentions = find_task_mentions(recent_tasks, user_id, user.get("username", ""))
             for m in task_mentions:
-                print(f"  [MENTION/TASK] @{m['commenter']} in: {m['task_name']}")
+                if m["kind"] == "description":
+                    print(f"  [MENTION/DESC] @{m['commenter']} in description: {m['task_name']}")
+                else:
+                    print(f"  [MENTION/TASK] @{m['commenter']} in: {m['task_name']}")
                 print(f"                 {m['url']}")
                 if m["text_preview"]:
                     print(f"                 \"{m['text_preview']}\"")
-                send_notification(
-                    f"ClickUp — @{m['commenter']} mentioned you",
-                    m["task_name"],
-                    subtitle=m["text_preview"] or "Click to open",
-                    url=m["url"],
+                title = (
+                    f"ClickUp — mentioned in task description"
+                    if m["kind"] == "description"
+                    else f"ClickUp — @{m['commenter']} mentioned you"
                 )
-                total_task_mentions += 1
-
-            # ── Task description @mentions ────────────────────────────────────
-            desc_mentions = find_description_mentions(recent_tasks, user_id, user.get("username", ""))
-            for m in desc_mentions:
-                print(f"  [MENTION/DESC] @{m['commenter']} in description: {m['task_name']}")
-                print(f"                 {m['url']}")
-                if m["text_preview"]:
-                    print(f"                 \"{m['text_preview']}\"")
                 send_notification(
-                    f"ClickUp — mentioned in task description",
+                    title,
                     m["task_name"],
                     subtitle=m["text_preview"] or "Click to open",
                     url=m["url"],

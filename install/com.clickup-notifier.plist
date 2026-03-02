@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Reference template — the setup script generates the real one automatically. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clickup-notifier</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>CLICKUP_API_TOKEN</key>
+        <string>YOUR_API_TOKEN_HERE</string>
+        <!-- true / false -->
+        <key>NOTIFY_TASKS</key>
+        <string>true</string>
+        <key>NOTIFY_CHAT</key>
+        <string>true</string>
+    </dict>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/YOUR_USERNAME/Scripts/clickup_notifier.py</string>
+    </array>
+
+    <!-- Run every 1800 seconds (30 minutes) -->
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/Scripts/logs/notifier.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/Scripts/logs/notifier_error.log</string>
+
+    <!-- Run immediately on load -->
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

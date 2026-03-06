@@ -221,6 +221,7 @@ def find_task_mentions(tasks, user_id, username=""):
                 })
 
         # ── Comment @mentions ─────────────────────────────────────────────────
+        comment_pattern = f"@{username}".lower() if username else None
         for comment in comments:
             mentioned = any(
                 isinstance(part, dict)
@@ -228,6 +229,8 @@ def find_task_mentions(tasks, user_id, username=""):
                 and str(part.get("user", {}).get("id", "")) == str(user_id)
                 for part in comment.get("comment", [])
             )
+            if not mentioned and comment_pattern:
+                mentioned = comment_pattern in comment.get("comment_text", "").lower()
             if not mentioned:
                 continue
 

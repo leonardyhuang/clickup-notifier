@@ -108,6 +108,8 @@ clickup_notifier.py          Main script
 install/
   setup.sh                   One-command installer
   com.clickup-notifier.plist launchd agent template
+tests/
+  test_clickup_notifier.py   Unit tests (no API calls)
 docs/
   python.md                  Python installation guide
   terminal-notifier.md       terminal-notifier installation guide
@@ -167,6 +169,17 @@ open ~/Library/LaunchAgents/com.clickup-notifier.plist
 - **Scope:** set `NOTIFY_TASKS` and/or `NOTIFY_CHAT` to `true` or `false`
 
 Then restart the agent for changes to take effect.
+
+---
+
+## Development
+
+```bash
+# Run the unit tests (no API token or network needed)
+python3 -m unittest tests.test_clickup_notifier -v
+```
+
+Tests cover mention detection (structured tags and plain-text `@username`), all suppression rules (user replied, reacted, thread reply), description mentions, and chat mentions.
 
 ---
 
